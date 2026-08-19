@@ -91,6 +91,14 @@ EXPO_PUBLIC_API_URL=http://YOUR_MAC_LAN_IP:3000
 
 Phone and Mac must be on the same Wi‑Fi. Example: `http://192.168.1.112:3000`
 
+**Videos on phone:** MinIO media must also be reachable. In `apps/api/.env` set:
+
+```
+S3_PUBLIC_URL=http://YOUR_MAC_LAN_IP:9000/lms-uploads
+```
+
+Keep `S3_ENDPOINT=http://localhost:9000` (API talks to MinIO on the Mac). Restart the API after changing it. The mobile app also rewrites `localhost` media URLs to your Mac IP automatically.
+
 ---
 
 ## Mobile tabs (what the user sees)

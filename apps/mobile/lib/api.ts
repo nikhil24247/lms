@@ -12,6 +12,19 @@ function getApiBase(): string {
 
 export const API_BASE = getApiBase();
 
+/** Phone cannot open localhost — rewrite media URLs to the Mac LAN host from EXPO_PUBLIC_API_URL. */
+export function toDeviceMediaUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const api = new URL(API_BASE);
+    return url
+      .replace(/https?:\/\/localhost(?=:\d+|\/|$)/gi, `${api.protocol}//${api.hostname}`)
+      .replace(/https?:\/\/127\.0\.0\.1(?=:\d+|\/|$)/gi, `${api.protocol}//${api.hostname}`);
+  } catch {
+    return url;
+  }
+}
+
 let authToken: string | null = null;
 type AuthListener = (authenticated: boolean) => void;
 const authListeners = new Set<AuthListener>();
@@ -340,12 +353,12 @@ export async function getCourse(trainingId: string): Promise<LearnerCourse> {
     title: m.title,
     moduleType: m.moduleType,
     contentType: mapModuleType(m.moduleType),
-    contentUrl: m.videoUrl || m.scormContentUrl || m.fileUrl || m.externalUrl,
+    contentUrl: toDeviceMediaUrl(m.videoUrl || m.scormContentUrl || m.fileUrl || m.externalUrl),
     scormEntryPointHtml: m.scormEntryPoint,
     richTextContent: m.richTextContent,
-    videoUrl: m.videoUrl,
-    fileUrl: m.fileUrl,
-    scormContentUrl: m.scormContentUrl,
+    videoUrl: toDeviceMediaUrl(m.videoUrl),
+    fileUrl: toDeviceMediaUrl(m.fileUrl),
+    scormContentUrl: toDeviceMediaUrl(m.scormContentUrl),
     scormEntryPoint: m.scormEntryPoint,
     externalUrl: m.externalUrl,
     passingScorePercentage: pass,
@@ -359,10 +372,10 @@ export async function getCourse(trainingId: string): Promise<LearnerCourse> {
         title: 'Watch video',
         moduleType: 'VIDEO',
         contentType: 'VIDEO_MP4',
-        contentUrl: t.videoUrl,
+        contentUrl: toDeviceMediaUrl(t.videoUrl),
         scormEntryPointHtml: null,
         richTextContent: null,
-        videoUrl: t.videoUrl,
+        videoUrl: toDeviceMediaUrl(t.videoUrl),
         fileUrl: null,
         scormContentUrl: null,
         scormEntryPoint: null,
@@ -393,12 +406,12 @@ export async function getCourse(trainingId: string): Promise<LearnerCourse> {
         title: 'SCORM module',
         moduleType: 'SCORM',
         contentType: 'SCORM_ZIP',
-        contentUrl: t.scormContentUrl,
+        contentUrl: toDeviceMediaUrl(t.scormContentUrl),
         scormEntryPointHtml: t.scormEntryPoint,
         richTextContent: null,
         videoUrl: null,
         fileUrl: null,
-        scormContentUrl: t.scormContentUrl,
+        scormContentUrl: toDeviceMediaUrl(t.scormContentUrl),
         scormEntryPoint: t.scormEntryPoint,
         externalUrl: null,
         passingScorePercentage: pass,

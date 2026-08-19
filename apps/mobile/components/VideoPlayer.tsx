@@ -25,11 +25,17 @@ export function VideoPlayer({
   const [completed, setCompleted] = useState(alreadyComplete);
   const [progress, setProgress] = useState(alreadyComplete ? 100 : 0);
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const firedRef = useRef(alreadyComplete);
   const resumeKey =
     enrollmentId || moduleId
       ? `lms_video_pos_${enrollmentId ?? 'x'}_${moduleId ?? 'root'}`
       : null;
+
+  useEffect(() => {
+    setError(null);
+    setReady(false);
+  }, [uri]);
 
   useEffect(() => {
     if (!resumeKey || !ready || alreadyComplete) return;
@@ -46,8 +52,16 @@ export function VideoPlayer({
   }, [resumeKey, ready, alreadyComplete]);
 
   const handlePlaybackStatus = (status: AVPlaybackStatus) => {
-    if (!status.isLoaded) return;
+    if (!status.isLoaded) {
+      if (status.error) {
+        setError(
+          `Cannot play video. Phone must reach MinIO on your Mac Wi‑Fi.\n${uri}\n${status.error}`,
+        );
+      }
+      return;
+    }
     if (!ready) setReady(true);
+    setError(null);
 
     const pct = status.durationMillis
       ? (status.positionMillis / status.durationMillis) * 100
@@ -72,20 +86,32 @@ export function VideoPlayer({
         ref={videoRef}
         source={{ uri }}
         useNativeControls
+        shouldPlay
         resizeMode={ResizeMode.CONTAIN}
         style={{ flex: 1, backgroundColor: '#000' }}
         onPlaybackStatusUpdate={handlePlaybackStatus}
+        onError={(err) =>
+          setError(`Cannot play video. Check Wi‑Fi and MinIO.\n${uri}\n${err}`)
+        }
       />
       <View className="p-4" style={{ backgroundColor: c.card }}>
-        <ProgressBar progress={progress} color={c.primary} />
-        {completed ? (
-          <Text className="text-sm mt-2 font-medium" style={{ color: c.success }}>
-            Video complete (90%+ watched)
+        {error ? (
+          <Text className="text-xs leading-5" style={{ color: c.danger }}>
+            {error}
           </Text>
         ) : (
-          <Text className="text-xs mt-2" style={{ color: c.muted }}>
-            Progress resumes if you leave and come back
-          </Text>
+          <>
+            <ProgressBar progress={progress} color={c.primary} />
+            {completed ? (
+              <Text className="text-sm mt-2 font-medium" style={{ color: c.success }}>
+                Video complete (90%+ watched)
+              </Text>
+            ) : (
+              <Text className="text-xs mt-2" style={{ color: c.muted }}>
+                Progress resumes if you leave and come back
+              </Text>
+            )}
+          </>
         )}
       </View>
     </View>
