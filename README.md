@@ -61,8 +61,8 @@ cd lms
 # 2. Install
 npx pnpm@9.15.0 install
 
-# 3. Copy env + start database/storage
-cp .env.example apps/api/.env   # or link root .env if your setup uses it
+# 3. Env for API + start database/storage
+cp .env.example apps/api/.env
 docker compose up -d
 
 # 4. Database schema + demo data
