@@ -1,0 +1,878 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  LEARNER
+  LMS_ADMIN
+  LINE_MANAGER
+  SYSTEM_ADMIN
+}
+
+enum TrainingType {
+  VIDEO_QUIZ
+  SCORM
+  MODULAR
+}
+
+enum TrainingModuleType {
+  VIDEO
+  QUIZ
+  SCORM
+  PDF
+  RICH_TEXT
+  EXTERNAL
+}
+
+enum ModuleCompletionRule {
+  VIEW
+  PASS_QUIZ
+  ACKNOWLEDGE
+  SCORM_COMPLETE
+  EXTERNAL_COMPLETE
+}
+
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTI_CHOICE
+  SCENARIO
+  ROLE_PLAY
+  HANDS_ON
+}
+
+enum SubmissionStatus {
+  PENDING_REVIEW
+  GRADED
+  AUTO_PASSED
+  REJECTED
+}
+
+enum EnrollmentStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+  FAILED
+}
+
+enum AssignmentTargetType {
+  USER
+  DEPARTMENT
+  GROUP
+  ALL
+}
+
+enum UploadJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum UploadJobType {
+  VIDEO
+  QUIZ_EXCEL
+  SCORM
+}
+
+enum CertificateType {
+  COMPLETION_PASS
+  PARTICIPATION
+}
+
+enum DifficultyLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  IN_APP
+  PUSH
+  SLACK
+  TEAMS
+}
+
+enum NotificationStatus {
+  PENDING
+  SCHEDULED
+  SENT
+  DELIVERED
+  FAILED
+  OPENED
+}
+
+enum ContentAssetType {
+  VIDEO
+  SCORM
+  QUIZ
+  GAME
+  DOCUMENT
+  TEMPLATE
+  EXTERNAL
+}
+
+enum ContentProvider {
+  INTERNAL
+  LINKEDIN_LEARNING
+  UDEMY
+  COURSERA
+  CUSTOM
+}
+
+enum ContentLinkRole {
+  PRIMARY_VIDEO
+  SCORM_PACKAGE
+  QUIZ_BANK
+  SUPPLEMENTAL
+  CERTIFICATE_TEMPLATE
+}
+
+enum BadgeCriteria {
+  COURSE_COMPLETION
+  MILESTONE
+  STREAK
+  TOP_PERFORMER
+  FAST_COMPLETION
+  CUSTOM
+}
+
+enum DiscussionType {
+  FORUM
+  QA
+  FEED
+}
+
+enum CompanyStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum DirectoryProvider {
+  LDAP
+  ACTIVE_DIRECTORY
+  AZURE_AD
+  SAML
+  SCIM
+}
+
+model Company {
+  id           String        @id @default(uuid())
+  name         String
+  slug         String        @unique
+  status       CompanyStatus @default(ACTIVE)
+  maxUsers     Int           @default(100)
+  maxCourses   Int           @default(50)
+  logoUrl             String?
+  primaryColor        String?
+  /** When true, show partner (e.g. Kavach / Asian Paints) logo on dashboards. */
+  showPartnerLogo     Boolean  @default(false)
+  /** Optional override URL for partner logo; falls back to built-in Kavach mark when empty. */
+  partnerLogoUrl      String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  users       User[]
+  departments Department[]
+  branches    Branch[]
+  trainings   Training[]
+  contentAssets ContentAsset[]
+  reminderTemplates ReminderTemplate[]
+  integrations CompanyIntegration[]
+  userGroups  UserGroup[]
+  directoryConfigs DirectoryConfig[]
+  directorySyncRuns DirectorySyncRun[]
+}
+
+model Department {
+  id        String   @id @default(uuid())
+  name      String
+  code      String
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  users     User[]
+
+  @@unique([companyId, code])
+}
+
+model Branch {
+  id        String   @id @default(uuid())
+  name      String
+  code      String
+  city      String?
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  users     User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, code])
+}
+
+model UserGroup {
+  id          String               @id @default(uuid())
+  companyId   String?
+  company     Company?             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  isDynamic   Boolean              @default(false)
+  /// Rules for dynamic groups, e.g. { departmentIds: [], branchIds: [], designations: [], roles: [] }
+  rulesJson   Json?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  members     UserGroupMember[]
+  assignments TrainingAssignment[] @relation("GroupAssignments")
+
+  @@unique([companyId, name])
+}
+
+model UserGroupMember {
+  userId  String
+  groupId String
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group   UserGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([userId, groupId])
+}
+
+model User {
+  id             String      @id @default(uuid())
+  email          String
+  fullName       String
+  role           UserRole    @default(LEARNER)
+  companyId      String?
+  company        Company?    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  departmentId   String?
+  department     Department? @relation(fields: [departmentId], references: [id])
+  branchId       String?
+  branch         Branch?     @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  designation    String?
+  hrisEmployeeId String?
+  location       String?
+  /// Microsoft Entra object id when provisioned via Azure AD Graph sync
+  azureObjectId  String?
+  managerId      String?
+  manager        User?       @relation("UserManager", fields: [managerId], references: [id], onDelete: SetNull)
+  directReports  User[]      @relation("UserManager")
+  learningPoints Int         @default(0)
+  isActive       Boolean     @default(true)
+  archivedAt     DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([companyId, email])
+  @@unique([hrisEmployeeId])
+  @@unique([companyId, azureObjectId])
+  @@index([companyId, isActive, archivedAt])
+  @@index([managerId])
+
+  createdTrainings   Training[]           @relation("TrainingCreator")
+  contentAssets      ContentAsset[]       @relation("ContentAssetCreator")
+  groupMemberships   UserGroupMember[]
+  enrollments        Enrollment[]
+  assessmentAttempts AssessmentAttempt[]
+  assessmentSubmissions AssessmentSubmission[]
+  auditLogs          AuditLog[]
+  uploadJobs         UploadJob[]
+  createdAssignments TrainingAssignment[] @relation("AssignmentCreator")
+  certificates       Certificate[]
+  notifications      Notification[]
+  badges             UserBadge[]
+  streak             UserStreak?
+  pointsHistory      PointsTransaction[]
+  discussionPosts    DiscussionPost[]
+  discussionReplies  DiscussionReply[]
+  policyAcknowledgments PolicyAcknowledgment[]
+  learnerNotifications LearnerNotification[]
+}
+
+model DirectoryConfig {
+  id           String            @id @default(uuid())
+  companyId    String
+  company      Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  provider     DirectoryProvider
+  enabled      Boolean           @default(false)
+  /// Connection / IdP settings (host, tenant, entityId, etc.) — secrets stored separately where possible
+  configJson   Json?
+  lastSyncAt   DateTime?
+  lastSyncNote String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  syncRuns     DirectorySyncRun[]
+
+  @@unique([companyId, provider])
+}
+
+enum DirectorySyncStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+model DirectorySyncRun {
+  id                 String              @id @default(uuid())
+  companyId          String
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  provider           DirectoryProvider
+  directoryConfigId  String?
+  directoryConfig    DirectoryConfig?    @relation(fields: [directoryConfigId], references: [id], onDelete: SetNull)
+  status             DirectorySyncStatus @default(RUNNING)
+  trigger            String              @default("manual") // manual | scheduled | test
+  startedAt          DateTime            @default(now())
+  finishedAt         DateTime?
+  importedCount      Int                 @default(0)
+  updatedCount       Int                 @default(0)
+  deactivatedCount   Int                 @default(0)
+  skippedCount       Int                 @default(0)
+  errorCount         Int                 @default(0)
+  /// [{ email?, message }]
+  errorsJson         Json?
+  note               String?
+
+  @@index([companyId, provider, startedAt])
+}
+
+model Training {
+  id                     String       @id @default(uuid())
+  title                  String
+  description            String       @default("")
+  type                   TrainingType
+  companyId              String?
+  company                Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  videoUrl               String?
+  scormContentUrl        String?
+  scormEntryPoint        String?
+  scormVersion           String?
+  /// Catalog / course metadata (also used when training is created as a course)
+  difficulty             DifficultyLevel?
+  category               String?
+  language               String       @default("en")
+  thumbnailUrl           String?
+  tags                   String[]     @default([])
+  version                String       @default("1.0")
+  /// When this training content stops being assignable / shown as current
+  expiresAt              DateTime?
+  passingScorePercentage Int          @default(70)
+  maxRetries             Int?
+  estimatedMinutes       Int          @default(15)
+  publishedAt            DateTime?
+  certificateType             CertificateType @default(COMPLETION_PASS)
+  participationCertEnabled    Boolean         @default(false)
+  certificateMinScore         Int             @default(70)
+  certificateTemplateUrl      String?
+  /// Issue certificate on completion/pass
+  certificateEnabled          Boolean         @default(true)
+  leaderboardEnabled          Boolean         @default(true)
+  leaderboardVisibleToLearners Boolean        @default(true)
+  reminderSchedule            String          @default("3,0,-1")
+  notificationChannels        String          @default("EMAIL")
+  notifyPending               Boolean         @default(true)
+  notifyOverdue               Boolean         @default(true)
+  certificationValidDays      Int?
+  createdById            String?
+  createdBy              User?        @relation("TrainingCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  questions   Question[]
+  assignments TrainingAssignment[]
+  enrollments Enrollment[]
+  certificates Certificate[]
+  notifications Notification[]
+  contentLinks TrainingContentLink[]
+  discussions  DiscussionPost[]
+  modules      TrainingModule[]
+
+  @@index([companyId, category])
+  @@index([companyId, difficulty])
+}
+
+model Question {
+  id              String       @id @default(uuid())
+  trainingId      String
+  training        Training     @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  questionText    String
+  questionType    QuestionType @default(SINGLE_CHOICE)
+  points          Int          @default(1)
+  explanation     String?
+  scenarioContext String?
+  mediaUrl        String?
+  interactionJson Json?
+  assignmentJson  Json?
+  order           Int          @default(0)
+  options         Option[]
+  submissions     AssessmentSubmission[]
+
+  @@index([trainingId, order])
+}
+
+model Option {
+  id         String   @id @default(uuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  optionText String
+  isCorrect  Boolean  @default(false)
+  feedback   String?
+  order      Int      @default(0)
+}
+
+model AssessmentSubmission {
+  id           String           @id @default(uuid())
+  enrollmentId String
+  enrollment   Enrollment       @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  questionId   String
+  question     Question         @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  textAnswer   String?
+  fileUrl      String?
+  score        Float?
+  feedback     String?
+  status       SubmissionStatus @default(PENDING_REVIEW)
+  submittedAt  DateTime         @default(now())
+  gradedAt     DateTime?
+  gradedById   String?
+
+  @@unique([enrollmentId, questionId])
+  @@index([status])
+}
+
+model TrainingAssignment {
+  id                     String               @id @default(uuid())
+  trainingId             String
+  training               Training             @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  targetType             AssignmentTargetType
+  targetId               String?
+  targetGroupId          String?
+  targetGroup            UserGroup?           @relation("GroupAssignments", fields: [targetGroupId], references: [id], onDelete: SetNull)
+  dueDate                DateTime?
+  relativeDueDays        Int?
+  isMandatory            Boolean              @default(true)
+  passingScorePercentage Int                  @default(70)
+  maxRetries             Int?
+  autoRemindDaysBefore   Int?
+  createdById            String?
+  createdBy              User?                @relation("AssignmentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+
+  enrollments Enrollment[]
+}
+
+model Enrollment {
+  id                 String              @id @default(uuid())
+  userId             String
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainingId         String
+  training           Training            @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  assignmentId       String?
+  assignment         TrainingAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  status             EnrollmentStatus    @default(NOT_STARTED)
+  progressPercentage Float               @default(0)
+  videoCompleted     Boolean             @default(false)
+  quizPassed         Boolean             @default(false)
+  scormScore         Float?
+  scormStatus        String?
+  timeSpentSec       Int                 @default(0)
+  startedAt          DateTime?
+  completionScore    Float?
+  completionPoints   Int?
+  assignedAt         DateTime            @default(now())
+  dueDate            DateTime?
+  completedAt        DateTime?
+  expiresAt          DateTime?
+  recertificationOfId String?
+
+  assessmentAttempts AssessmentAttempt[]
+  scormSessions      ScormSession[]
+  certificates       Certificate[]
+  submissions        AssessmentSubmission[]
+  moduleProgress     ModuleProgress[]
+  policyAcknowledgments PolicyAcknowledgment[]
+
+  @@unique([userId, trainingId])
+  @@index([userId, status])
+}
+
+model ScormSession {
+  id           String     @id @default(uuid())
+  enrollmentId String
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  score        Float?
+  status       String?
+  cmiData      Json?
+  timeSpentSec Int        @default(0)
+  attempt      Int        @default(1)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model AssessmentAttempt {
+  id           String     @id @default(uuid())
+  enrollmentId String
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainingId   String?
+  score        Float
+  isPassed     Boolean
+  answersJson  Json
+  attemptedAt  DateTime   @default(now())
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action       String
+  resource     String
+  ipAddress    String?
+  timestamp    DateTime @default(now())
+  metadataJson Json?
+
+  @@index([timestamp])
+}
+
+model UploadJob {
+  id           String          @id @default(uuid())
+  userId       String?
+  user         User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  trainingId   String?
+  type         UploadJobType
+  status       UploadJobStatus @default(PENDING)
+  errorMessage String?
+  metadataJson Json?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model MultipartUpload {
+  id             String   @id @default(uuid())
+  trainingId     String?
+  contentAssetId String?
+  uploadKey      String
+  s3UploadId     String
+  fileName       String
+  fileSize       BigInt
+  contentType    String
+  status         String   @default("IN_PROGRESS")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Certificate {
+  id                String          @id @default(uuid())
+  enrollmentId      String          @unique
+  enrollment        Enrollment      @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainingId        String
+  training          Training        @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  type              CertificateType
+  certificateNumber String          @unique
+  score             Float?
+  isPassed          Boolean         @default(true)
+  pdfUrl            String?
+  issuedAt          DateTime        @default(now())
+
+  @@index([userId])
+  @@index([trainingId])
+}
+
+model Notification {
+  id            String              @id @default(uuid())
+  userId        String
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainingId    String?
+  training      Training?           @relation(fields: [trainingId], references: [id], onDelete: SetNull)
+  assignmentId  String?
+  channel       NotificationChannel @default(EMAIL)
+  subject       String
+  body          String
+  status        NotificationStatus  @default(PENDING)
+  scheduledAt   DateTime?
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  openedAt      DateTime?
+  failureReason String?
+  metadataJson  Json?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([status, scheduledAt])
+  @@index([userId])
+}
+
+model ReminderTemplate {
+  id            String              @id @default(uuid())
+  companyId     String?
+  company       Company?            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name          String
+  subject       String
+  bodyHtml      String
+  channel       NotificationChannel @default(EMAIL)
+  daysBeforeDue Int?
+  isOverdue     Boolean             @default(false)
+  isDefault     Boolean             @default(false)
+  isActive      Boolean             @default(true)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([companyId, daysBeforeDue, isOverdue])
+}
+
+model NotificationSettings {
+  id              String   @id @default("default")
+  emailEnabled    Boolean  @default(true)
+  pushEnabled     Boolean  @default(false)
+  slackEnabled    Boolean  @default(false)
+  teamsEnabled    Boolean  @default(false)
+  slackWebhookUrl String?
+  teamsWebhookUrl String?
+  notifyPending   Boolean  @default(true)
+  notifyOverdue   Boolean  @default(true)
+  updatedAt       DateTime @updatedAt
+}
+
+model ContentAsset {
+  id               String           @id @default(uuid())
+  companyId        String?
+  company          Company?         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title            String
+  description      String           @default("")
+  type             ContentAssetType
+  provider         ContentProvider  @default(INTERNAL)
+  category         String?
+  tags             String[]         @default([])
+  difficulty       DifficultyLevel?
+  language         String           @default("en")
+  thumbnailUrl     String?
+  version          String           @default("1.0")
+  /// Course content expiry (catalog) — when content should be retired
+  expiresAt        DateTime?
+  videoUrl         String?
+  scormContentUrl  String?
+  scormEntryPoint  String?
+  scormVersion     String?
+  fileUrl          String?
+  mimeType         String?
+  externalUrl      String?
+  externalCourseId String?
+  estimatedMinutes Int              @default(15)
+  metadataJson     Json?
+  isArchived       Boolean          @default(false)
+  createdById      String?
+  createdBy        User?            @relation("ContentAssetCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  trainingLinks TrainingContentLink[]
+  questions     ContentQuestion[]
+  modules       TrainingModule[]
+
+  @@index([companyId, type])
+  @@index([type, provider])
+  @@index([category])
+  @@index([difficulty])
+}
+
+model ContentQuestion {
+  id           String       @id @default(uuid())
+  assetId      String
+  asset        ContentAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  questionText String
+  questionType QuestionType @default(SINGLE_CHOICE)
+  points       Int          @default(1)
+  explanation  String?
+  order        Int          @default(0)
+  options      ContentOption[]
+
+  @@index([assetId, order])
+}
+
+model ContentOption {
+  id         String          @id @default(uuid())
+  questionId String
+  question   ContentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  optionText String
+  isCorrect  Boolean         @default(false)
+  order      Int             @default(0)
+}
+
+model TrainingContentLink {
+  id             String           @id @default(uuid())
+  trainingId     String
+  training       Training         @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  contentAssetId String
+  contentAsset   ContentAsset     @relation(fields: [contentAssetId], references: [id], onDelete: Cascade)
+  role           ContentLinkRole
+  order          Int              @default(0)
+  createdAt      DateTime         @default(now())
+
+  @@unique([trainingId, contentAssetId, role])
+  @@index([trainingId])
+  @@index([contentAssetId])
+}
+
+model Badge {
+  id          String        @id @default(uuid())
+  code        String        @unique
+  name        String
+  description String        @default("")
+  icon        String        @default("award")
+  criteria    BadgeCriteria @default(COURSE_COMPLETION)
+  threshold   Int?
+  points      Int           @default(10)
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+
+  userBadges UserBadge[]
+}
+
+model UserBadge {
+  userId   String
+  badgeId  String
+  earnedAt DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge    Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, badgeId])
+}
+
+model UserStreak {
+  userId         String    @id
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentStreak  Int       @default(0)
+  longestStreak  Int       @default(0)
+  lastActivityAt DateTime?
+}
+
+model PointsTransaction {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model DiscussionPost {
+  id         String         @id @default(uuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainingId String?
+  training   Training?      @relation(fields: [trainingId], references: [id], onDelete: SetNull)
+  type       DiscussionType @default(FEED)
+  title      String?
+  body       String
+  isPinned   Boolean        @default(false)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  replies    DiscussionReply[]
+
+  @@index([type, createdAt])
+  @@index([trainingId])
+}
+
+model DiscussionReply {
+  id        String         @id @default(uuid())
+  postId    String
+  post      DiscussionPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime       @default(now())
+
+  @@index([postId])
+}
+
+model TrainingModule {
+  id              String               @id @default(uuid())
+  trainingId      String
+  training        Training             @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  title           String
+  moduleType      TrainingModuleType
+  order           Int                  @default(0)
+  isRequired      Boolean              @default(true)
+  completionRule  ModuleCompletionRule   @default(VIEW)
+  contentAssetId  String?
+  contentAsset    ContentAsset?        @relation(fields: [contentAssetId], references: [id], onDelete: SetNull)
+  richTextContent String?
+  externalUrl     String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  moduleProgress ModuleProgress[]
+  policyAcknowledgments PolicyAcknowledgment[]
+
+  @@index([trainingId, order])
+}
+
+model ModuleProgress {
+  id           String         @id @default(uuid())
+  enrollmentId String
+  enrollment   Enrollment     @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  moduleId     String
+  module       TrainingModule   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  isCompleted  Boolean        @default(false)
+  completedAt  DateTime?
+  progressJson Json?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([enrollmentId, moduleId])
+}
+
+model PolicyAcknowledgment {
+  id              String         @id @default(uuid())
+  enrollmentId    String
+  enrollment      Enrollment     @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  moduleId        String
+  module          TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  acknowledgedAt  DateTime       @default(now())
+  ipAddress       String?
+  userAgent       String?
+  documentVersion String?
+  signatureText   String?
+
+  @@unique([enrollmentId, moduleId])
+}
+
+model CompanyIntegration {
+  id          String          @id @default(uuid())
+  companyId   String
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  provider    ContentProvider
+  apiKey      String?
+  syncEnabled Boolean         @default(false)
+  lastSyncAt  DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([companyId, provider])
+}
+
+model LearnerNotification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  linkUrl   String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+}

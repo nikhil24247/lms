@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --shadow-card: 0 1px 3px 0 rgb(15 23 42 / 0.04), 0 4px 16px -2px rgb(15 23 42 / 0.06);
+    --shadow-glow: 0 0 40px -8px rgb(20 184 166 / 0.35);
+    --gradient-hero: linear-gradient(135deg, #0f766e 0%, #0d9488 35%, #6366f1 100%);
+    --gradient-login: linear-gradient(135deg, #0f172a 0%, #134e4a 50%, #312e81 100%);
+    --skeleton-base: #e2e8f0;
+    --skeleton-highlight: #f8fafc;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+    background-image: radial-gradient(at 0% 0%, rgb(20 184 166 / 0.05) 0px, transparent 50%);
+  }
+
+  h1, h2, h3 {
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-2xl border border-slate-200/80;
+    box-shadow: var(--shadow-card);
+  }
+  .card-hover {
+    @apply card transition-all duration-200 hover:shadow-md hover:border-brand-200/70 hover:-translate-y-0.5;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] bg-gradient-to-r from-brand-600 to-brand-500 text-white rounded-xl font-medium text-sm hover:from-brand-700 hover:to-brand-600 transition-all shadow-sm disabled:opacity-50 active:scale-[0.98];
+  }
+  .btn-primary:hover:not(:disabled) {
+    box-shadow: var(--shadow-glow);
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] bg-white text-slate-700 border border-slate-200 rounded-xl font-medium text-sm hover:bg-slate-50 transition-colors;
+  }
+  .touch-target {
+    @apply min-h-[44px];
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  .input {
+    @apply w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 bg-white;
+  }
+  .page-title {
+    @apply text-xl sm:text-2xl font-bold text-slate-900 tracking-tight font-display;
+  }
+  .hero-banner {
+    @apply relative overflow-hidden rounded-2xl text-white p-6 md:p-8 shadow-md;
+    background-image: var(--gradient-hero);
+  }
+  .nav-link {
+    @apply text-slate-500 hover:text-brand-600 flex items-center gap-1.5 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-brand-50;
+  }
+  .nav-link-active {
+    @apply text-brand-700 bg-brand-50 font-semibold;
+  }
+  .bg-mesh-login {
+    background-image: var(--gradient-login);
+  }
+  .bg-mesh-learner {
+    background-image: radial-gradient(at 40% 20%, rgb(20 184 166 / 0.08) 0px, transparent 50%), radial-gradient(at 80% 0%, rgb(99 102 241 / 0.06) 0px, transparent 50%);
+  }
+  .skeleton-shimmer {
+    background: linear-gradient(90deg, var(--skeleton-base) 0%, var(--skeleton-highlight) 50%, var(--skeleton-base) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
+}
