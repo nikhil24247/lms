@@ -1,94 +1,204 @@
-# ProLMS — Learning Management System
+# ProLMS
 
-Clone → setup → run. Each person runs the full stack **on their own computer**.  
-You do **not** need the author’s Wi‑Fi or phone network.
+Simple Learning Management System for compliance / awareness training.
 
-**GitHub:** [https://github.com/nikhil24247/lms](https://github.com/nikhil24247/lms)
+**This repo:** https://github.com/nikhil24247/lms
+
+Everyone runs the app **on their own computer**. You do not need anyone else’s Wi‑Fi.
 
 ---
 
-## Share with a colleague (2 minutes of instructions)
+## Quick start (do this first)
 
-1. Invite them on GitHub (repo → **Settings → Collaborators**), or make the repo public.
-2. They run:
+### What you need installed
+
+1. **Node.js 20+** — https://nodejs.org  
+2. **Docker Desktop** — https://www.docker.com/products/docker-desktop/ (must be **running**)  
+3. Git
+
+### Step 1 — Clone
 
 ```bash
 git clone https://github.com/nikhil24247/lms.git
 cd lms
+```
+
+### Step 2 — Setup (one command)
+
+```bash
 bash scripts/setup.sh
+```
+
+This will:
+
+- install packages  
+- start Postgres + MinIO (Docker)  
+- create env files  
+- create database tables  
+- load demo users and sample training  
+
+Wait until it prints **Setup complete**.
+
+### Step 3 — Start the apps
+
+```bash
 npx pnpm@9.15.0 dev
 ```
 
-3. They open on **their** machine:
-   - Admin: http://localhost:5173/admin/ → `admin@example.com`
-   - Learner: http://localhost:5174/app/ → `learner@example.com`
+Leave this terminal open.
 
-That’s it. Docker runs Postgres + file storage on their laptop. No connection to your network.
+### Step 4 — Open in your browser
 
----
+| App | Link | Login email |
+|-----|------|-------------|
+| **Admin** (create / assign training) | http://localhost:5173/admin/ | `admin@example.com` |
+| **Learner** (take training) | http://localhost:5174/app/ | `learner@example.com` |
+| API (backend) | http://localhost:3000 | — |
 
-## What each folder is
-
-| Folder | Role |
-|--------|------|
-| `apps/api` | Backend (NestJS + Postgres + MinIO) |
-| `apps/admin` | Admin website |
-| `apps/learner` | Learner website |
-| `apps/mobile` | Phone app (Expo) — optional for demos |
-| `packages/shared` | Shared types |
-| `scripts/setup.sh` | One-shot install for a new machine |
+**Password:** none — type the email and sign in.
 
 ---
 
-## Demo logins
+## How to try the product (5 minutes)
 
-| Email | Where |
-|-------|--------|
-| `admin@example.com` | Admin |
-| `learner@example.com` | Learner web / mobile |
+### As admin
 
-No password (demo).
+1. Open http://localhost:5173/admin/  
+2. Sign in with `admin@example.com`  
+3. Browse **Courses / Trainings**, **Users**, **Assignments**, **Reports**
+
+### As learner
+
+1. Open http://localhost:5174/app/  
+2. Sign in with `learner@example.com`  
+3. Open an assigned training (e.g. cybersecurity awareness)  
+4. Watch video / take quiz  
+
+### Mobile app (optional)
+
+```bash
+npx pnpm --filter @lms/mobile dev
+```
+
+- Use **Expo Go** on your phone, or a simulator.  
+- For a **real phone**, phone and your laptop must be on the **same Wi‑Fi**, and set your laptop’s IP in `apps/mobile/.env` (see below).
 
 ---
 
-## Requirements
+## Project map (what is where)
 
-- Node 20+
-- Docker Desktop running
-- pnpm 9 (script uses `npx pnpm@9.15.0`)
+```
+lms/
+├── apps/
+│   ├── api/        ← Backend API (NestJS) — port 3000
+│   ├── admin/      ← Admin website — port 5173
+│   ├── learner/    ← Learner website — port 5174
+│   └── mobile/     ← Phone app (Expo)
+├── packages/shared ← Shared types
+├── scripts/setup.sh
+├── docker-compose.yml
+└── README.md       ← you are reading this
+```
+
+| Who | Use this app |
+|-----|----------------|
+| Training manager | Admin |
+| Employee / learner | Learner web (or Mobile) |
+| Developer | All of the above |
 
 ---
 
-## Everyday commands
+## Demo accounts
 
-| Command | Meaning |
-|---------|--------|
-| `bash scripts/setup.sh` | First time on a machine |
-| `npx pnpm@9.15.0 dev` | API + admin + learner |
-| `npx pnpm --filter @lms/mobile dev` | Expo mobile |
-| `docker compose up -d` | Start DB + MinIO if stopped |
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | `admin@example.com` | _(none)_ |
+| Learner | `learner@example.com` | _(none)_ |
+
+---
+
+## Useful commands
+
+| When | Command |
+|------|---------|
+| First time on a PC | `bash scripts/setup.sh` |
+| Start websites + API | `npx pnpm@9.15.0 dev` |
+| Start mobile only | `npx pnpm --filter @lms/mobile dev` |
+| DB / MinIO stopped | `docker compose up -d` |
+| Re-load demo data | `npx pnpm --filter @lms/api db:seed` |
+
+---
+
+## Access checklist
+
+After `dev` is running, these should work **on the same computer**:
+
+- [ ] http://localhost:5173/admin/ opens Admin login  
+- [ ] http://localhost:5174/app/ opens Learner login  
+- [ ] Login with the emails above works  
+- [ ] Learner can see assigned training  
+
+If something fails, see **Troubleshooting** below.
 
 ---
 
 ## Mobile on a real phone (optional)
 
-Phone must reach **the same computer that runs the API** (colleague’s Wi‑Fi, not yours).
+Your phone must talk to **your** laptop (not someone else’s).
 
-1. On that computer: `ipconfig getifaddr en0` (Mac) → e.g. `192.168.1.20`
-2. `apps/mobile/.env` → `EXPO_PUBLIC_API_URL=http://192.168.1.20:3000`
-3. `apps/api/.env` → `S3_PUBLIC_URL=http://192.168.1.20:9000/lms-uploads`
-4. Restart API + Expo
+1. Find your laptop Wi‑Fi IP  
+   - Mac: `ipconfig getifaddr en0`  
+   - Windows: `ipconfig` → IPv4 Address  
+2. Edit `apps/mobile/.env`:
 
-The mobile app also rewrites `localhost` media URLs to that API host automatically.
+```env
+EXPO_PUBLIC_API_URL=http://YOUR_LAPTOP_IP:3000
+```
+
+3. Edit `apps/api/.env`:
+
+```env
+S3_PUBLIC_URL=http://YOUR_LAPTOP_IP:9000/lms-uploads
+```
+
+4. Restart API and Expo, then open the project in Expo Go.
 
 ---
 
-## Internet hosting (later)
+## Troubleshooting
 
-This repo is set up for **local demos**. Putting it on the public internet (so people open a URL without cloning) needs cloud hosting (API + DB + storage + builds). That’s a separate step — not required for sharing the code with a colleague.
+| Problem | Fix |
+|-------|-----|
+| `docker` errors | Open **Docker Desktop**, wait until it is running, then run setup again |
+| Port already in use | Stop other apps using 3000 / 5173 / 5174, or restart the terminal |
+| Login fails | Use exactly `admin@example.com` or `learner@example.com` (no password) |
+| Blank / old data | Run `bash scripts/setup.sh` again |
+| Video won’t play on phone | Set LAN IP in `apps/mobile/.env` and `S3_PUBLIC_URL` (see Mobile section) |
+| Can’t open GitHub repo | Ask the owner to **invite you as Collaborator** or make the repo **public** |
 
 ---
 
-## Flow (simple)
+## For the repo owner — how to share this GitHub repo
 
-Admin creates/assigns training → learner opens it → video/quiz/SCORM → points & certificates.
+1. Go to https://github.com/nikhil24247/lms  
+2. **Settings → Collaborators → Add people** (their GitHub username/email)  
+   **or** **Settings → Change visibility → Make public**  
+3. Send them this README link and say:
+
+> Clone the repo, run `bash scripts/setup.sh`, then `npx pnpm@9.15.0 dev`, then open the Admin / Learner links above.
+
+---
+
+## Note about the internet
+
+This project is meant to run **locally** for demos.  
+It is **not** a public website URL yet. To host it online for everyone without cloning, you need cloud deployment later (API + database + storage).
+
+---
+
+## Simple product flow
+
+1. Admin creates / publishes training  
+2. Admin assigns it to learners  
+3. Learner opens training → video / quiz / SCORM  
+4. Progress, points, badges, certificates update automatically  
