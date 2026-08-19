@@ -1,7 +1,7 @@
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { AlertTriangle, Flame, Trophy, ChevronRight, Calendar } from 'lucide-react-native';
+import { Flame, Trophy, ChevronRight } from 'lucide-react-native';
 import {
   getAssignedEnrollments,
   getCurrentUser,
@@ -36,18 +36,6 @@ export default function HomeScreen() {
   const items = assigned ?? [];
   const completed = items.filter((e) => e.status === 'COMPLETED').length;
   const pending = items.filter((e) => e.status !== 'COMPLETED').length;
-  const inProgress = items.filter((e) => e.status === 'IN_PROGRESS');
-  const continueItem = inProgress[0] ?? items.find((e) => e.status === 'NOT_STARTED');
-  const overdue = items.filter(
-    (e) => e.dueDate && new Date(e.dueDate) < new Date() && e.status !== 'COMPLETED',
-  );
-  const dueSoon = items
-    .filter((e) => {
-      if (!e.dueDate || e.status === 'COMPLETED') return false;
-      const days = (new Date(e.dueDate).getTime() - Date.now()) / 86400000;
-      return days >= 0 && days <= 14;
-    })
-    .slice(0, 3);
   const pct = items.length ? Math.round((completed / items.length) * 100) : 0;
   const points = recognition?.learningPoints ?? user?.learningPoints ?? 0;
   const topBoard = (board?.entries ?? []).slice(0, 5);
@@ -108,45 +96,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {overdue.length > 0 ? (
-        <View
-          className="mx-4 mt-3 p-3 rounded-2xl flex-row items-center gap-2"
-          style={{ backgroundColor: '#fff1f2' }}
-        >
-          <AlertTriangle color={c.danger} size={18} />
-          <Text className="text-sm flex-1 font-medium" style={{ color: c.danger }}>
-            {overdue.length} overdue training{overdue.length > 1 ? 's' : ''}
-          </Text>
-        </View>
-      ) : null}
-
-      {continueItem ? (
-        <View className="mx-4 mt-4">
-          <SectionHeader title="Continue learning" />
-          <TrainingCard
-            enrollment={continueItem}
-            onPress={() => router.push(`/course/${continueItem.training.id}`)}
-          />
-        </View>
-      ) : null}
-
-      {dueSoon.length > 0 ? (
-        <View className="mx-4 mt-2">
-          <View className="flex-row items-center gap-2 mb-2">
-            <Calendar color={c.warning} size={16} />
-            <SectionHeader title="Due soon" />
-          </View>
-          {dueSoon.map((e) => (
-            <TrainingCard
-              key={e.id}
-              enrollment={e}
-              onPress={() => router.push(`/course/${e.training.id}`)}
-            />
-          ))}
-        </View>
-      ) : null}
-
-      <View className="mx-4 mt-2">
+      <View className="mx-4 mt-4">
         <View className="flex-row justify-between items-center mb-2">
           <SectionHeader title="Assigned training" />
           <TouchableOpacity onPress={() => router.push('/training')}>
@@ -155,7 +105,7 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
         </View>
-        {items.slice(0, 3).map((e) => (
+        {items.slice(0, 5).map((e) => (
           <TrainingCard
             key={e.id}
             enrollment={e}
