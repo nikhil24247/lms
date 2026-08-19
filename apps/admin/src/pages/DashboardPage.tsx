@@ -9,14 +9,14 @@ import {
   Plus,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { QueryState } from '../components/QueryState';
 import { CircularProgress, MiniBarChart, PatternOverlay } from '../components/graphics';
 import { QuickActionCard } from '../components/flow/QuickActionCard';
 import { PageTransition } from '../components/ui/motion';
 import { AnimatedNumber } from '../components/ui/AnimatedNumber';
 import { PartnerLogo } from '../components/PartnerLogo';
-import { api, getDashboard } from '../lib/api';
+import { getDashboard } from '../lib/api';
 
 interface DashboardData {
   branding?: {
@@ -51,16 +51,9 @@ interface DashboardData {
 }
 
 export function DashboardPage() {
-  const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: ['dashboard'],
     queryFn: getDashboard as () => Promise<DashboardData>,
-  });
-
-  const brandingMutation = useMutation({
-    mutationFn: (showPartnerLogo: boolean) =>
-      api.patch('/api/v1/admin/branding', { showPartnerLogo }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
   });
 
   const stats = data?.stats;
@@ -99,24 +92,6 @@ export function DashboardPage() {
               </div>
               <CircularProgress value={stats?.complianceRate ?? 0} size={120} label="Compliance" sublabel="live" />
             </div>
-          </div>
-
-          <div className="card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <p className="font-semibold text-slate-900">Kavach / partner logo</p>
-              <p className="text-sm text-slate-500">
-                Optionally show the Asian Paints Kavach mark on this dashboard (and learner home).
-              </p>
-            </div>
-            <label className="inline-flex items-center gap-2 text-sm font-medium cursor-pointer shrink-0">
-              <input
-                type="checkbox"
-                checked={!!branding?.showPartnerLogo}
-                disabled={brandingMutation.isPending}
-                onChange={(e) => brandingMutation.mutate(e.target.checked)}
-              />
-              Display Kavach logo
-            </label>
           </div>
 
           <section>
