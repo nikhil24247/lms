@@ -1,51 +1,145 @@
-# Enterprise LMS (ProPhish)
+# ProLMS — Learning Management System
 
-Monorepo for an enterprise Mobile Learning Management System with distinct Admin and Learner portals.
+Simple enterprise LMS for compliance and awareness training.
 
-## Structure
+**Share this project:** [https://github.com/nikhil24247/lms](https://github.com/nikhil24247/lms)
 
-- `apps/api` — NestJS API with Prisma + PostgreSQL + MinIO/S3 storage
-- `apps/admin` — React admin portal at `/admin` (course builder, assignments, uploads, analytics)
-- `apps/mobile` — Expo Router learner app (assigned feed, players, certificates)
-- `packages/shared` — Shared types, enums, and Zod schemas
+Local copy on this Mac: `/Users/nikhiljayakar/Downloads/ProPhish`
 
-## Quick Start
+---
 
-```bash
-npx pnpm@9.15.0 install
-docker compose up -d
-cd apps/api && npx prisma db push --accept-data-loss && npx ts-node prisma/seed.ts
-cd ../.. && npx pnpm@9.15.0 dev
+## What you get
+
+| App | Folder | Who uses it | URL |
+|-----|--------|-------------|-----|
+| **API** | `apps/api` | Backend for everyone | http://localhost:3000 |
+| **Admin** | `apps/admin` | Training managers | http://localhost:5173/admin/ |
+| **Learner web** | `apps/learner` | Employees in browser | http://localhost:5174/app/ |
+| **Mobile** | `apps/mobile` | Employees on phone (Expo) | Expo Go / Metro `:8081` |
+| **Shared types** | `packages/shared` | Used by all apps | — |
+
+```
+ProPhish/
+├── apps/
+│   ├── api/        ← NestJS + Prisma + Postgres
+│   ├── admin/      ← Create courses, assign, reports
+│   ├── learner/    ← Browser learner portal
+│   └── mobile/     ← Phone app (main learner UX)
+├── packages/shared
+├── docker-compose.yml   ← Postgres + MinIO
+└── README.md           ← you are here
 ```
 
-## Services
+---
 
-| Service | URL |
-|---------|-----|
-| API | http://localhost:3000 |
-| Admin Portal | http://localhost:5173/admin/ |
-| Learner Portal | http://localhost:5174/app/ |
-| Mobile (Expo) | `npx pnpm --filter @lms/mobile dev` |
-| MinIO Console | http://localhost:9001 |
+## How learning works (one sentence)
 
-## Demo Accounts
+Admin creates a training → assigns people → learner opens it on **mobile** (or web) → watches video / quiz / SCORM → gets points, badges, certificate.
 
-| Role | Email | Portal |
-|------|-------|--------|
-| LMS Admin | `admin@example.com` | Admin at `/admin` |
-| Learner | `learner@example.com` | Mobile app (auto-login in dev) |
+---
 
-## Key Features
+## Demo logins
 
-- **Chunked video upload** — MP4/MOV/AVI up to 1GB via multipart presigned URLs
-- **Generic course builder** — Any topic, flexible module ordering (video, quiz, SCORM, PDF, rich text)
-- **Training assignments** — Target users/departments/groups/all with due dates, passing scores, retries, reminders
-- **Learner feed** — "Assigned to Me" ordered by due date and urgency
-- **Compliance** — Audit log CSV export, analytics dashboard, policy acknowledgments
+| Email | Use in |
+|-------|--------|
+| `admin@example.com` | Admin portal |
+| `learner@example.com` | Mobile + learner web |
 
-## API Highlights
+No password — email only (demo JWT).
 
-- `POST /api/v1/admin/upload/presigned-url` — Initiate chunked video upload
-- `GET/POST /api/v1/admin/courses` — Course builder CRUD
-- `GET/POST /api/v1/admin/assignments` — Training assignment matrix
-- `GET /api/v1/enrollments/assigned` — Learner assigned feed
+---
+
+## Run on a new machine (5 steps)
+
+**Need:** Node 20+, Docker Desktop, pnpm 9.
+
+```bash
+# 1. Clone
+git clone https://github.com/nikhil24247/lms.git
+cd lms
+
+# 2. Install
+npx pnpm@9.15.0 install
+
+# 3. Copy env + start database/storage
+cp .env.example apps/api/.env   # or link root .env if your setup uses it
+docker compose up -d
+
+# 4. Database schema + demo data
+cd apps/api
+npx prisma db push
+npx ts-node prisma/seed.ts
+cd ../..
+
+# 5. Start everything
+npx pnpm@9.15.0 dev
+```
+
+Then open:
+
+- Admin → http://localhost:5173/admin/ → `admin@example.com`
+- Learner web → http://localhost:5174/app/ → `learner@example.com`
+- Mobile → from `apps/mobile`: `npx pnpm --filter @lms/mobile dev` → Expo Go on phone
+
+### Phone API URL
+
+Edit `apps/mobile/.env`:
+
+```
+EXPO_PUBLIC_API_URL=http://YOUR_MAC_LAN_IP:3000
+```
+
+Phone and Mac must be on the same Wi‑Fi. Example: `http://192.168.1.112:3000`
+
+---
+
+## Mobile tabs (what the user sees)
+
+1. **Home** — welcome, points, assigned trainings, mini leaderboard  
+2. **Trainings** — list: title, status, score, due/expiry  
+3. **Leaderboard** — ranks by total points  
+4. **Rewards** — points, streak, badges  
+5. **Profile** — profile + link to certificates  
+
+Open a training → steps (video / quiz / SCORM / PDF) → progress saved to API.
+
+---
+
+## Git status
+
+Yes — this Mac pushes to GitHub automatically after substantive changes.
+
+- Remote: `https://github.com/nikhil24247/lms.git`
+- Branch: `main`
+- Latest work includes mobile Home/Trainings simplify + training player polish
+
+To confirm yourself:
+
+```bash
+cd /Users/nikhiljayakar/Downloads/ProPhish
+git status          # should say "up to date with origin/main"
+git log -3 --oneline
+```
+
+To share with someone: send them the GitHub link above. They clone and follow **Run on a new machine**.
+
+If the repo is **private**, invite them as a collaborator on GitHub (Settings → Collaborators), or make the repo public temporarily.
+
+---
+
+## Useful commands
+
+| Command | What it does |
+|---------|----------------|
+| `docker compose up -d` | Postgres `:5433` + MinIO `:9000` |
+| `npx pnpm@9.15.0 dev` | API + admin + learner |
+| `npx pnpm --filter @lms/mobile dev` | Expo mobile |
+| `npx pnpm --filter @lms/api db:seed` | Re-seed demo users/courses |
+
+---
+
+## Design choice (keep it simple)
+
+- **Do not rewrite** Nest/admin for demos — they already work.  
+- **Show** the mobile learner app first; use admin only to assign content.  
+- Shared logic lives in `apps/api`; UIs only call REST.
