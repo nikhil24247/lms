@@ -8,18 +8,31 @@ import { ProgressBar } from './ui';
 interface VideoPlayerProps {
   uri: string;
   enrollmentId?: string;
+  moduleId?: string;
+  alreadyComplete?: boolean;
   onComplete?: () => void;
 }
 
-export function VideoPlayer({ uri, enrollmentId, onComplete }: VideoPlayerProps) {
+export function VideoPlayer({
+  uri,
+  enrollmentId,
+  moduleId,
+  alreadyComplete = false,
+  onComplete,
+}: VideoPlayerProps) {
   const { c } = useTheme();
   const videoRef = useRef<Video>(null);
-  const [completed, setCompleted] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const resumeKey = enrollmentId ? `lms_video_pos_${enrollmentId}` : null;
+  const [completed, setCompleted] = useState(alreadyComplete);
+  const [progress, setProgress] = useState(alreadyComplete ? 100 : 0);
+  const [ready, setReady] = useState(false);
+  const firedRef = useRef(alreadyComplete);
+  const resumeKey =
+    enrollmentId || moduleId
+      ? `lms_video_pos_${enrollmentId ?? 'x'}_${moduleId ?? 'root'}`
+      : null;
 
   useEffect(() => {
-    if (!resumeKey) return;
+    if (!resumeKey || !ready || alreadyComplete) return;
     AsyncStorage.getItem(resumeKey).then(async (raw) => {
       const pos = raw ? Number(raw) : 0;
       if (pos > 1000 && videoRef.current) {
@@ -30,21 +43,23 @@ export function VideoPlayer({ uri, enrollmentId, onComplete }: VideoPlayerProps)
         }
       }
     });
-  }, [resumeKey]);
+  }, [resumeKey, ready, alreadyComplete]);
 
   const handlePlaybackStatus = (status: AVPlaybackStatus) => {
     if (!status.isLoaded) return;
+    if (!ready) setReady(true);
 
     const pct = status.durationMillis
       ? (status.positionMillis / status.durationMillis) * 100
       : 0;
     setProgress(pct);
 
-    if (resumeKey && status.positionMillis % 5000 < 400) {
+    if (resumeKey && !completed && status.positionMillis % 5000 < 400) {
       AsyncStorage.setItem(resumeKey, String(status.positionMillis)).catch(() => {});
     }
 
-    if (pct >= 90 && !completed) {
+    if (pct >= 90 && !firedRef.current) {
+      firedRef.current = true;
       setCompleted(true);
       if (resumeKey) AsyncStorage.removeItem(resumeKey).catch(() => {});
       onComplete?.();

@@ -8,24 +8,35 @@ import { TrainingCard } from '../../components/TrainingCard';
 import { ScreenLoader } from '../../components/ui';
 import { useTheme } from '../../context/ThemeContext';
 
-type Filter = 'ALL' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE';
+type Filter = 'ALL' | 'LIVE' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE' | 'EXPIRED';
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'ALL', label: 'All' },
+  { id: 'LIVE', label: 'Live' },
   { id: 'ASSIGNED', label: 'Assigned' },
   { id: 'IN_PROGRESS', label: 'In Progress' },
   { id: 'COMPLETED', label: 'Completed' },
   { id: 'OVERDUE', label: 'Overdue' },
+  { id: 'EXPIRED', label: 'Expired' },
 ];
 
+function isExpired(e: EnrollmentRow) {
+  if (e.status === 'EXPIRED') return true;
+  return !!(e.expiresAt && new Date(e.expiresAt) < new Date());
+}
+
 function isOverdue(e: EnrollmentRow) {
-  return !!(e.dueDate && new Date(e.dueDate) < new Date() && e.status !== 'COMPLETED');
+  return !!(e.dueDate && new Date(e.dueDate) < new Date() && e.status !== 'COMPLETED' && !isExpired(e));
+}
+
+function isLive(e: EnrollmentRow) {
+  return !isExpired(e) && (e.status === 'NOT_STARTED' || e.status === 'IN_PROGRESS');
 }
 
 export default function TrainingScreen() {
   const router = useRouter();
   const { c } = useTheme();
-  const [filter, setFilter] = useState<Filter>('ALL');
+  const [filter, setFilter] = useState<Filter>('LIVE');
   const [search, setSearch] = useState('');
 
   const { data, isLoading } = useQuery({
@@ -35,10 +46,12 @@ export default function TrainingScreen() {
 
   const filtered = useMemo(() => {
     let rows = data ?? [];
-    if (filter === 'ASSIGNED') rows = rows.filter((e) => e.status === 'NOT_STARTED');
-    if (filter === 'IN_PROGRESS') rows = rows.filter((e) => e.status === 'IN_PROGRESS');
-    if (filter === 'COMPLETED') rows = rows.filter((e) => e.status === 'COMPLETED');
+    if (filter === 'LIVE') rows = rows.filter(isLive);
+    if (filter === 'ASSIGNED') rows = rows.filter((e) => e.status === 'NOT_STARTED' && !isExpired(e));
+    if (filter === 'IN_PROGRESS') rows = rows.filter((e) => e.status === 'IN_PROGRESS' && !isExpired(e));
+    if (filter === 'COMPLETED') rows = rows.filter((e) => e.status === 'COMPLETED' && !isExpired(e));
     if (filter === 'OVERDUE') rows = rows.filter(isOverdue);
+    if (filter === 'EXPIRED') rows = rows.filter(isExpired);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       rows = rows.filter((e) => e.training.title.toLowerCase().includes(q));

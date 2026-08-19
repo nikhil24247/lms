@@ -80,9 +80,48 @@ export default function LeaderboardScreen() {
         </Text>
       )}
 
-      <SectionHeader title="Near you" subtitle="±3 around your rank" />
-      <View className="rounded-2xl border overflow-hidden" style={{ borderColor: c.border, backgroundColor: c.card }}>
-        {nearby.map((e) => {
+      {nearby.length > 0 ? (
+        <>
+          <SectionHeader title="Near you" subtitle="±3 around your rank" />
+          <View
+            className="rounded-2xl border overflow-hidden mb-4"
+            style={{ borderColor: c.border, backgroundColor: c.card }}
+          >
+            {nearby.map((e) => {
+              const you = e.isCurrentUser || e.userId === data?.me?.userId;
+              return (
+                <View
+                  key={`near-${e.userId}`}
+                  className="flex-row items-center px-4 py-3 border-b"
+                  style={{
+                    borderColor: c.border,
+                    backgroundColor: you ? c.primarySoft : c.card,
+                  }}
+                >
+                  <Text className="w-12 font-bold" style={{ color: you ? c.primary : c.muted }}>
+                    #{e.rank}
+                  </Text>
+                  <View className="flex-1">
+                    <Text className="font-semibold" style={{ color: c.text }} numberOfLines={1}>
+                      {you ? 'YOU' : e.email}
+                    </Text>
+                    <Text className="text-xs" style={{ color: c.muted }}>
+                      {e.department}
+                    </Text>
+                  </View>
+                  <Text className="font-bold" style={{ color: c.text }}>
+                    {e.learningPoints}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </>
+      ) : null}
+
+      <SectionHeader title="Full rankings" subtitle="Email · Department · Total points" />
+      <View className="rounded-2xl border overflow-hidden mb-2" style={{ borderColor: c.border, backgroundColor: c.card }}>
+        {(data?.entries ?? []).map((e) => {
           const you = e.isCurrentUser || e.userId === data?.me?.userId;
           return (
             <View
@@ -110,12 +149,17 @@ export default function LeaderboardScreen() {
             </View>
           );
         })}
-        {nearby.length === 0 ? (
+        {(data?.entries ?? []).length === 0 ? (
           <Text className="p-6 text-center" style={{ color: c.muted }}>
             No rankings yet
           </Text>
         ) : null}
       </View>
+      {data && data.lowestRank > 0 ? (
+        <Text className="text-xs mb-6" style={{ color: c.muted }}>
+          Lowest rank #{data.lowestRank}
+        </Text>
+      ) : null}
     </ScrollView>
   );
 }

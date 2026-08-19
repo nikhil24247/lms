@@ -1,7 +1,16 @@
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Play, FileQuestion, Monitor, FileText, Clock, ChevronRight } from 'lucide-react-native';
+import {
+  Play,
+  FileQuestion,
+  Monitor,
+  FileText,
+  Clock,
+  ChevronRight,
+  CheckCircle,
+  ExternalLink,
+} from 'lucide-react-native';
 import { getCourse, startTraining } from '../../../lib/api';
 import { ProgressBar, ScreenLoader } from '../../../components/ui';
 import { useTheme } from '../../../context/ThemeContext';
@@ -14,6 +23,7 @@ const contentIcons: Record<string, typeof Play> = {
   PDF_POLICY: FileText,
   DOCUMENT_PDF: FileText,
   RICH_TEXT: FileText,
+  EXTERNAL: ExternalLink,
 };
 
 const contentLabels: Record<string, string> = {
@@ -23,11 +33,13 @@ const contentLabels: Record<string, string> = {
   PDF_POLICY: 'Document',
   DOCUMENT_PDF: 'Document',
   RICH_TEXT: 'Reading',
+  EXTERNAL: 'External',
 };
 
 function trainingTypeLabel(type: string) {
   if (type.includes('SCORM')) return type.includes('2004') ? 'SCORM 2004' : 'SCORM 1.2';
   if (type.includes('VIDEO') || type.includes('QUIZ')) return 'Video + Quiz';
+  if (type === 'MODULAR') return 'Training path';
   return type.replace(/_/g, ' ');
 }
 
@@ -43,10 +55,10 @@ export default function CourseDetailScreen() {
   });
 
   useEffect(() => {
-    if (course?.enrollmentId) {
+    if (course?.enrollmentId && course.status !== 'COMPLETED') {
       startTraining(course.enrollmentId).catch(() => {});
     }
-  }, [course?.enrollmentId]);
+  }, [course?.enrollmentId, course?.status]);
 
   if (isLoading) return <ScreenLoader />;
 
@@ -60,10 +72,26 @@ export default function CourseDetailScreen() {
     );
   }
 
+  const isStepDone = (moduleId: string, contentType: string) => {
+    if (course.completedModuleIds.includes(moduleId)) return true;
+    if (moduleId.startsWith('video-') && course.videoCompleted) return true;
+    if (moduleId.startsWith('quiz-') && course.quizPassed) return true;
+    if (contentType === 'VIDEO_MP4' && course.videoCompleted && course.type === 'VIDEO_QUIZ') {
+      return moduleId.startsWith('video-');
+    }
+    return false;
+  };
+
+  const resumeModule =
+    course.modules.find((m) => !isStepDone(m.id, m.contentType)) ?? course.modules[0];
+
   return (
     <ScrollView className="flex-1" style={{ backgroundColor: c.bg }}>
       <View className="p-5" style={{ backgroundColor: c.primary }}>
-        <Text className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.75)' }}>
+        <Text
+          className="text-xs font-semibold uppercase tracking-wider"
+          style={{ color: 'rgba(255,255,255,0.75)' }}
+        >
           {trainingTypeLabel(course.type)}
         </Text>
         <Text className="text-white text-2xl font-bold mt-1">{course.title}</Text>
@@ -78,6 +106,11 @@ export default function CourseDetailScreen() {
             {course.estimatedMinutes} minutes
           </Text>
         </View>
+        {course.expiresAt ? (
+          <Text className="text-xs mt-2" style={{ color: 'rgba(255,255,200,0.9)' }}>
+            Certification expires {new Date(course.expiresAt).toLocaleDateString()}
+          </Text>
+        ) : null}
         <View className="mt-4">
           <ProgressBar progress={course.progressPercentage} color="#ffffff" />
           <Text className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.85)' }}>
@@ -85,6 +118,20 @@ export default function CourseDetailScreen() {
           </Text>
         </View>
       </View>
+
+      {resumeModule && course.status !== 'COMPLETED' ? (
+        <View className="px-4 pt-4">
+          <TouchableOpacity
+            onPress={() => router.push(`/course/${id}/module/${resumeModule.id}`)}
+            className="rounded-2xl py-3.5 items-center"
+            style={{ backgroundColor: c.primary }}
+          >
+            <Text className="text-white font-semibold">
+              {course.progressPercentage > 0 ? 'Continue learning' : 'Start training'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       <View className="p-4">
         <Text
@@ -96,6 +143,7 @@ export default function CourseDetailScreen() {
 
         {course.modules.map((module, idx) => {
           const Icon = contentIcons[module.contentType] ?? Play;
+          const stepDone = isStepDone(module.id, module.contentType);
           const hasContent =
             !!module.contentUrl ||
             module.contentType === 'QUIZ_EXCEL' ||
@@ -110,11 +158,15 @@ export default function CourseDetailScreen() {
             >
               <View
                 className="w-10 h-10 rounded-xl items-center justify-center mr-3"
-                style={{ backgroundColor: c.primarySoft }}
+                style={{ backgroundColor: stepDone ? '#d1fae5' : c.primarySoft }}
               >
-                <Text className="font-bold text-sm" style={{ color: c.primary }}>
-                  {idx + 1}
-                </Text>
+                {stepDone ? (
+                  <CheckCircle color={c.success} size={18} />
+                ) : (
+                  <Text className="font-bold text-sm" style={{ color: c.primary }}>
+                    {idx + 1}
+                  </Text>
+                )}
               </View>
               <View className="flex-1">
                 <Text className="text-base font-semibold" style={{ color: c.text }}>
@@ -122,6 +174,7 @@ export default function CourseDetailScreen() {
                 </Text>
                 <Text className="text-xs mt-0.5" style={{ color: c.muted }}>
                   {contentLabels[module.contentType] ?? module.contentType}
+                  {stepDone ? ' · Done' : ''}
                 </Text>
                 {!hasContent ? (
                   <Text className="text-xs mt-0.5" style={{ color: c.warning }}>
@@ -130,7 +183,7 @@ export default function CourseDetailScreen() {
                 ) : null}
               </View>
               <View className="flex-row items-center gap-2">
-                <Icon color={c.primary} size={18} />
+                <Icon color={stepDone ? c.success : c.primary} size={18} />
                 <ChevronRight color={c.muted} size={16} />
               </View>
             </TouchableOpacity>

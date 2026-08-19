@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Home, BookOpen, Trophy, Award, User } from 'lucide-react-native';
+import { Home, BookOpen, Trophy, Flame, User } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { HeaderActions } from '../../components/HeaderActions';
 
@@ -35,8 +35,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="training"
         options={{
-          title: 'My Training',
-          headerTitle: 'My Training',
+          title: 'Trainings',
+          headerTitle: 'My Trainings',
           tabBarIcon: ({ color, size }) => <BookOpen color={color} size={size} />,
         }}
       />
@@ -49,11 +49,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="certificates"
+        name="rewards"
         options={{
-          title: 'Certificates',
-          headerTitle: 'Certificates',
-          tabBarIcon: ({ color, size }) => <Award color={color} size={size} />,
+          title: 'Rewards',
+          headerTitle: 'Rewards & Badges',
+          tabBarIcon: ({ color, size }) => <Flame color={color} size={size} />,
         }}
       />
       <Tabs.Screen
@@ -64,6 +64,8 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
         }}
       />
+      {/* Certificates stay reachable from Profile; not a main tab */}
+      <Tabs.Screen name="certificates" options={{ href: null, title: 'Certificates' }} />
     </Tabs>
   );
 }

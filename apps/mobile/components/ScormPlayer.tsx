@@ -1,7 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
+import NetInfo from '@react-native-community/netinfo';
 import { saveScormProgress } from '../lib/api';
+import { useSyncQueueStore } from '../stores/syncQueue.store';
 import { useTheme } from '../context/ThemeContext';
 
 interface ScormPlayerProps {
@@ -13,6 +15,8 @@ interface ScormPlayerProps {
 
 const SCORM_BRIDGE_JS = `
 (function() {
+  if (window.__lmsScormBridge) return true;
+  window.__lmsScormBridge = true;
   var store = {};
   function post(msg) { try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch(e) {} }
   var API = {
@@ -39,37 +43,82 @@ const SCORM_BRIDGE_JS = `
 true;
 `;
 
+function lessonStatusFromCmi(cmi: Record<string, string>, fallback?: string) {
+  return (
+    fallback ||
+    cmi['cmi.core.lesson_status'] ||
+    cmi['cmi.completion_status'] ||
+    cmi['cmi.success_status'] ||
+    'incomplete'
+  );
+}
+
 export function ScormPlayer({ baseUrl, entryPoint, enrollmentId, moduleId }: ScormPlayerProps) {
   const { c } = useTheme();
   const webViewRef = useRef<WebView>(null);
   const [status, setStatus] = useState('Launching…');
   const cmiRef = useRef<Record<string, string>>({});
-  const launchUrl = `${baseUrl}/${entryPoint}`.replace(/([^:]\/)\/+/g, '$1');
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPayload = useRef<string>('');
+  const addItem = useSyncQueueStore((s) => s.addItem);
+  const launchUrl = `${baseUrl.replace(/\/$/, '')}/${entryPoint.replace(/^\//, '')}`.replace(
+    /([^:]\/)\/+/g,
+    '$1',
+  );
+  const realModuleId = moduleId?.startsWith('scorm-') ? undefined : moduleId;
 
   const flush = async (finalStatus?: string) => {
     const cmi = cmiRef.current;
-    const scoreRaw =
-      cmi['cmi.core.score.raw'] || cmi['cmi.score.raw'] || cmi['cmi.core.score.raw'];
-    const lesson =
-      finalStatus ||
-      cmi['cmi.core.lesson_status'] ||
-      cmi['cmi.completion_status'] ||
-      cmi['cmi.success_status'] ||
-      'incomplete';
-    const score = scoreRaw != null && scoreRaw !== '' ? Number(scoreRaw) : undefined;
+    const scoreRaw = cmi['cmi.core.score.raw'] || cmi['cmi.score.raw'] || '';
+    const lesson = lessonStatusFromCmi(cmi, finalStatus);
+    const score = scoreRaw !== '' ? Number(scoreRaw) : undefined;
+    const body = {
+      enrollmentId,
+      score: Number.isFinite(score) ? score : undefined,
+      status: lesson,
+      cmiData: cmi,
+      moduleId: realModuleId,
+    };
+    const fingerprint = JSON.stringify({
+      status: body.status,
+      score: body.score,
+      keys: Object.keys(cmi).length,
+    });
+    if (fingerprint === lastPayload.current && !finalStatus) return;
+    lastPayload.current = fingerprint;
+
     try {
-      await saveScormProgress({
-        enrollmentId,
-        score: Number.isFinite(score) ? score : undefined,
-        status: lesson,
-        cmiData: cmi,
-        moduleId: moduleId?.startsWith('scorm-') ? undefined : moduleId,
-      });
-      setStatus(`Saved · ${lesson}${score != null ? ` · ${score}%` : ''}`);
+      const net = await NetInfo.fetch();
+      if (!net.isConnected) {
+        addItem({ type: 'PROGRESS_UPDATE', payload: { kind: 'scorm', ...body } });
+        setStatus('Saved offline — will sync later');
+        return;
+      }
+      await saveScormProgress(body);
+      setStatus(`Saved · ${lesson}${score != null && Number.isFinite(score) ? ` · ${score}%` : ''}`);
     } catch (e) {
+      addItem({ type: 'PROGRESS_UPDATE', payload: { kind: 'scorm', ...body } });
       setStatus(e instanceof Error ? e.message : 'Could not save SCORM progress');
     }
   };
+
+  const scheduleFlush = (finalStatus?: string) => {
+    if (flushTimer.current) clearTimeout(flushTimer.current);
+    if (finalStatus) {
+      void flush(finalStatus);
+      return;
+    }
+    // ponytail: debounce commits; SCORM packages spam LMSCommit
+    flushTimer.current = setTimeout(() => void flush(), 1200);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (flushTimer.current) clearTimeout(flushTimer.current);
+      void flush();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleMessage = (event: WebViewMessageEvent) => {
     try {
@@ -80,18 +129,18 @@ export function ScormPlayer({ baseUrl, entryPoint, enrollmentId, moduleId }: Sco
         cmi?: Record<string, string>;
       };
       if (data.cmi) cmiRef.current = { ...cmiRef.current, ...data.cmi };
+      if (data.method === 'LMSInitialize') setStatus('In progress…');
       if (data.method === 'LMSSetValue' && data.key != null) {
         cmiRef.current[data.key] = data.value ?? '';
         setStatus('In progress…');
       }
-      if (data.method === 'LMSCommit') {
-        void flush();
-      }
+      if (data.method === 'LMSCommit') scheduleFlush();
       if (data.method === 'LMSFinish') {
-        void flush('completed');
+        // use CMI lesson status when present; don't invent "completed"
+        void flush(lessonStatusFromCmi(cmiRef.current));
       }
     } catch {
-      // ignore
+      // ignore non-JSON
     }
   };
 
@@ -106,10 +155,18 @@ export function ScormPlayer({ baseUrl, entryPoint, enrollmentId, moduleId }: Sco
         ref={webViewRef}
         source={{ uri: launchUrl }}
         injectedJavaScriptBeforeContentLoaded={SCORM_BRIDGE_JS}
+        injectedJavaScript={SCORM_BRIDGE_JS}
         onMessage={handleMessage}
         javaScriptEnabled
         domStorageEnabled
+        sharedCookiesEnabled
+        thirdPartyCookiesEnabled
         allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
+        originWhitelist={['*']}
+        mixedContentMode="always"
+        allowFileAccess
+        setSupportMultipleWindows={false}
         style={{ flex: 1 }}
       />
     </View>

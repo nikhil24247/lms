@@ -1,14 +1,14 @@
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { AlertTriangle, Flame, Trophy, ChevronRight } from 'lucide-react-native';
+import { AlertTriangle, Flame, Trophy, ChevronRight, Calendar } from 'lucide-react-native';
 import {
   getAssignedEnrollments,
   getCurrentUser,
   getLeaderboard,
   getRecognitionProfile,
 } from '../../lib/api';
-import { SectionHeader, ScreenLoader, ProgressBar, Skeleton } from '../../components/ui';
+import { SectionHeader, ScreenLoader, ProgressBar } from '../../components/ui';
 import { TrainingCard } from '../../components/TrainingCard';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -41,8 +41,16 @@ export default function HomeScreen() {
   const overdue = items.filter(
     (e) => e.dueDate && new Date(e.dueDate) < new Date() && e.status !== 'COMPLETED',
   );
+  const dueSoon = items
+    .filter((e) => {
+      if (!e.dueDate || e.status === 'COMPLETED') return false;
+      const days = (new Date(e.dueDate).getTime() - Date.now()) / 86400000;
+      return days >= 0 && days <= 14;
+    })
+    .slice(0, 3);
   const pct = items.length ? Math.round((completed / items.length) * 100) : 0;
   const points = recognition?.learningPoints ?? user?.learningPoints ?? 0;
+  const topBoard = (board?.entries ?? []).slice(0, 5);
 
   if (isLoading || userLoading) return <ScreenLoader />;
 
@@ -85,7 +93,8 @@ export default function HomeScreen() {
             Org rank{board?.lowestRank ? ` of ${board.lowestRank}` : ''}
           </Text>
         </View>
-        <View
+        <TouchableOpacity
+          onPress={() => router.push('/rewards')}
           className="flex-1 rounded-2xl p-4 border"
           style={{ backgroundColor: c.card, borderColor: c.border }}
         >
@@ -96,7 +105,7 @@ export default function HomeScreen() {
           <Text className="text-xs" style={{ color: c.muted }}>
             Total points
           </Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
       {overdue.length > 0 ? (
@@ -118,6 +127,22 @@ export default function HomeScreen() {
             enrollment={continueItem}
             onPress={() => router.push(`/course/${continueItem.training.id}`)}
           />
+        </View>
+      ) : null}
+
+      {dueSoon.length > 0 ? (
+        <View className="mx-4 mt-2">
+          <View className="flex-row items-center gap-2 mb-2">
+            <Calendar color={c.warning} size={16} />
+            <SectionHeader title="Due soon" />
+          </View>
+          {dueSoon.map((e) => (
+            <TrainingCard
+              key={e.id}
+              enrollment={e}
+              onPress={() => router.push(`/course/${e.training.id}`)}
+            />
+          ))}
         </View>
       ) : null}
 
@@ -144,33 +169,57 @@ export default function HomeScreen() {
         ) : null}
       </View>
 
-      <View className="mx-4 mt-2">
+      <View className="mx-4 mt-2 mb-2">
         <TouchableOpacity
           onPress={() => router.push('/leaderboard')}
           className="flex-row items-center justify-between mb-2"
         >
-          <SectionHeader title="Recent achievements" />
+          <SectionHeader title="Leaderboard" subtitle="Total points only" />
           <ChevronRight color={c.muted} size={18} />
         </TouchableOpacity>
-        {(recognition?.badges ?? []).length === 0 ? (
-          <Text className="text-sm" style={{ color: c.muted }}>
-            Complete training to earn badges
-          </Text>
-        ) : (
-          <View className="flex-row flex-wrap gap-2">
-            {recognition!.badges.slice(0, 6).map((b) => (
+        <View
+          className="rounded-2xl border overflow-hidden"
+          style={{ borderColor: c.border, backgroundColor: c.card }}
+        >
+          {topBoard.map((e) => {
+            const you = e.isCurrentUser || e.userId === board?.me?.userId;
+            const medal = e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : '';
+            return (
               <View
-                key={b.code}
-                className="px-3 py-2 rounded-xl border"
-                style={{ backgroundColor: c.card, borderColor: c.border }}
+                key={e.userId}
+                className="flex-row items-center px-4 py-3 border-b"
+                style={{
+                  borderColor: c.border,
+                  backgroundColor: you ? c.primarySoft : c.card,
+                }}
               >
-                <Text className="text-sm font-semibold" style={{ color: c.text }}>
-                  {b.name}
+                <Text className="w-14 font-bold" style={{ color: you ? c.primary : c.muted }}>
+                  {medal}#{e.rank}
+                </Text>
+                <Text className="flex-1 font-medium" style={{ color: c.text }} numberOfLines={1}>
+                  {you ? 'YOU' : e.email}
+                </Text>
+                <Text className="font-bold" style={{ color: c.text }}>
+                  {e.learningPoints}
                 </Text>
               </View>
-            ))}
-          </View>
-        )}
+            );
+          })}
+          {topBoard.length === 0 ? (
+            <Text className="p-5 text-center text-sm" style={{ color: c.muted }}>
+              No rankings yet
+            </Text>
+          ) : null}
+        </View>
+        <TouchableOpacity
+          onPress={() => router.push('/leaderboard')}
+          className="mt-3 py-3 rounded-xl items-center"
+          style={{ backgroundColor: c.primarySoft }}
+        >
+          <Text className="font-semibold" style={{ color: c.primary }}>
+            Full leaderboard
+          </Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );

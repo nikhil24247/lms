@@ -22,6 +22,8 @@ export function StatusChip({ status }: { status: string }) {
     IN_PROGRESS: { bg: '#e0e7ff', fg: '#4338ca', label: 'In progress' },
     NOT_STARTED: { bg: '#f1f5f9', fg: '#475569', label: 'Not started' },
     OVERDUE: { bg: '#ffe4e6', fg: '#be123c', label: 'Overdue' },
+    EXPIRED: { bg: '#fef3c7', fg: '#b45309', label: 'Expired' },
+    FAILED: { bg: '#ffe4e6', fg: '#be123c', label: 'Failed' },
   };
   const s = map[status] ?? map.NOT_STARTED;
   return (

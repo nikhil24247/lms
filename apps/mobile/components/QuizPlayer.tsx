@@ -19,6 +19,7 @@ interface QuizPlayerProps {
     options: { id: string; optionText: string }[];
   }[];
   allowRetry?: boolean;
+  onSubmitted?: () => void;
 }
 
 export function QuizPlayer({
@@ -27,6 +28,7 @@ export function QuizPlayer({
   passingScore,
   questions,
   allowRetry = true,
+  onSubmitted,
 }: QuizPlayerProps) {
   const { c } = useTheme();
   const [idx, setIdx] = useState(0);
@@ -54,6 +56,7 @@ export function QuizPlayer({
       }
       const res = await submitAssessment(enrollmentId, moduleId, answers);
       setResult(res);
+      onSubmitted?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Submit failed');
       addItem({ type: 'ASSESSMENT_SUBMIT', payload });

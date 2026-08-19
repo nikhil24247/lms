@@ -258,7 +258,8 @@ export class TrainingsController {
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse> {
     const data = await this.trainingsService.saveScormProgress(body.enrollmentId, user, body);
-    if (body.moduleId) {
+    const lesson = (body.status ?? '').toLowerCase();
+    if (body.moduleId && (lesson === 'passed' || lesson === 'completed')) {
       await this.modulesService.completeModule(body.enrollmentId, body.moduleId, user.id);
     }
     return { success: true, message: 'SCORM progress saved', data };

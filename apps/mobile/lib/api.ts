@@ -108,6 +108,9 @@ export type EnrollmentRow = {
   progressPercentage: number;
   dueDate: string | null;
   completedAt: string | null;
+  expiresAt?: string | null;
+  videoCompleted?: boolean;
+  quizPassed?: boolean;
   isMandatory: boolean;
   completionScore?: number | null;
   scormScore?: number | null;
@@ -255,6 +258,7 @@ export type LearnerModule = {
   fileUrl: string | null;
   scormContentUrl: string | null;
   scormEntryPoint: string | null;
+  externalUrl?: string | null;
   passingScorePercentage: number | null;
 };
 
@@ -268,6 +272,10 @@ export type LearnerCourse = {
   enrollmentId: string;
   progressPercentage: number;
   status: string;
+  videoCompleted: boolean;
+  quizPassed: boolean;
+  expiresAt: string | null;
+  completedModuleIds: string[];
   passingScorePercentage: number;
   questions: {
     id: string;
@@ -285,6 +293,10 @@ export async function getCourse(trainingId: string): Promise<LearnerCourse> {
       id: string;
       status: string;
       progressPercentage: number;
+      videoCompleted?: boolean;
+      quizPassed?: boolean;
+      expiresAt?: string | null;
+      moduleProgress?: { moduleId: string; isCompleted: boolean }[];
     };
     training: {
       id: string;
@@ -319,6 +331,9 @@ export async function getCourse(trainingId: string): Promise<LearnerCourse> {
 
   const t = data.training;
   const pass = t.passingScorePercentage ?? 70;
+  const completedModuleIds = (data.enrollment.moduleProgress ?? [])
+    .filter((p) => p.isCompleted)
+    .map((p) => p.moduleId);
 
   let modules: LearnerModule[] = (t.modules ?? []).map((m) => ({
     id: m.id,
@@ -332,6 +347,7 @@ export async function getCourse(trainingId: string): Promise<LearnerCourse> {
     fileUrl: m.fileUrl,
     scormContentUrl: m.scormContentUrl,
     scormEntryPoint: m.scormEntryPoint,
+    externalUrl: m.externalUrl,
     passingScorePercentage: pass,
   }));
 
@@ -350,6 +366,7 @@ export async function getCourse(trainingId: string): Promise<LearnerCourse> {
         fileUrl: null,
         scormContentUrl: null,
         scormEntryPoint: null,
+        externalUrl: null,
         passingScorePercentage: pass,
       });
     }
@@ -366,6 +383,7 @@ export async function getCourse(trainingId: string): Promise<LearnerCourse> {
         fileUrl: null,
         scormContentUrl: null,
         scormEntryPoint: null,
+        externalUrl: null,
         passingScorePercentage: pass,
       });
     }
@@ -382,6 +400,7 @@ export async function getCourse(trainingId: string): Promise<LearnerCourse> {
         fileUrl: null,
         scormContentUrl: t.scormContentUrl,
         scormEntryPoint: t.scormEntryPoint,
+        externalUrl: null,
         passingScorePercentage: pass,
       });
     }
@@ -397,6 +416,10 @@ export async function getCourse(trainingId: string): Promise<LearnerCourse> {
     enrollmentId: data.enrollment.id,
     progressPercentage: data.enrollment.progressPercentage,
     status: data.enrollment.status,
+    videoCompleted: !!data.enrollment.videoCompleted,
+    quizPassed: !!data.enrollment.quizPassed,
+    expiresAt: data.enrollment.expiresAt ?? null,
+    completedModuleIds,
     passingScorePercentage: pass,
     questions: t.questions ?? [],
     modules,
@@ -415,6 +438,8 @@ function mapModuleType(moduleType: string): string {
       return 'PDF_POLICY';
     case 'RICH_TEXT':
       return 'RICH_TEXT';
+    case 'EXTERNAL':
+      return 'EXTERNAL';
     default:
       return moduleType;
   }
@@ -457,6 +482,17 @@ export async function markVideoComplete(enrollmentId: string) {
   return request('/api/v1/trainings/progress/video-complete', {
     method: 'POST',
     body: JSON.stringify({ enrollmentId }),
+  });
+}
+
+export async function completeModule(
+  enrollmentId: string,
+  moduleId: string,
+  signatureText?: string,
+) {
+  return request('/api/v1/trainings/progress/module-complete', {
+    method: 'POST',
+    body: JSON.stringify({ enrollmentId, moduleId, signatureText }),
   });
 }
 

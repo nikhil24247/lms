@@ -1,7 +1,13 @@
-import { View, Text } from 'react-native';
+import { useState } from 'react';
+import { View, Text, Linking, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
-import { getCourse, markVideoComplete } from '../../../../lib/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ExternalLink } from 'lucide-react-native';
+import {
+  getCourse,
+  markVideoComplete,
+  completeModule,
+} from '../../../../lib/api';
 import { VideoPlayer } from '../../../../components/VideoPlayer';
 import { QuizPlayer } from '../../../../components/QuizPlayer';
 import { ScormPlayer } from '../../../../components/ScormPlayer';
@@ -13,6 +19,7 @@ import { useTheme } from '../../../../context/ThemeContext';
 export default function ModuleScreen() {
   const { id, moduleId } = useLocalSearchParams<{ id: string; moduleId: string }>();
   const { c } = useTheme();
+  const queryClient = useQueryClient();
 
   const { data: course, isLoading } = useQuery({
     queryKey: ['course', id],
@@ -21,6 +28,26 @@ export default function ModuleScreen() {
   });
 
   const module = course?.modules.find((m) => m.id === moduleId);
+  const [done, setDone] = useState(false);
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['course', id] });
+    queryClient.invalidateQueries({ queryKey: ['assigned-enrollments'] });
+  };
+
+  const markModuleDone = async (signatureText?: string) => {
+    if (!course || !module) return;
+    if (module.id.startsWith('video-') || module.id.startsWith('quiz-') || module.id.startsWith('scorm-')) {
+      return;
+    }
+    try {
+      await completeModule(course.enrollmentId, module.id, signatureText);
+      setDone(true);
+      refresh();
+    } catch {
+      // keep UI usable
+    }
+  };
 
   if (isLoading || !course) return <ScreenLoader />;
 
@@ -38,6 +65,12 @@ export default function ModuleScreen() {
   const videoUri = module.videoUrl || module.contentUrl;
   const scormUri = module.scormContentUrl || module.contentUrl;
   const pdfUri = module.fileUrl || module.contentUrl;
+  const externalUrl = module.externalUrl || module.contentUrl;
+  const alreadyDone =
+    done ||
+    course.completedModuleIds.includes(module.id) ||
+    (module.contentType === 'VIDEO_MP4' &&
+      (module.id.startsWith('video-') ? course.videoCompleted : course.completedModuleIds.includes(module.id)));
 
   return (
     <View className="flex-1" style={{ backgroundColor: c.bg }}>
@@ -45,14 +78,25 @@ export default function ModuleScreen() {
         <Text className="text-lg font-semibold" style={{ color: c.text }}>
           {module.title}
         </Text>
+        {alreadyDone ? (
+          <Text className="text-xs mt-1 font-medium" style={{ color: c.success }}>
+            Completed
+          </Text>
+        ) : null}
       </View>
 
       {module.contentType === 'VIDEO_MP4' && videoUri ? (
         <VideoPlayer
           uri={videoUri}
           enrollmentId={course.enrollmentId}
+          moduleId={module.id}
+          alreadyComplete={alreadyDone}
           onComplete={() => {
-            markVideoComplete(course.enrollmentId).catch(() => {});
+            if (module.id.startsWith('video-')) {
+              markVideoComplete(course.enrollmentId).then(refresh).catch(() => {});
+            } else {
+              void markModuleDone();
+            }
           }}
         />
       ) : null}
@@ -64,6 +108,7 @@ export default function ModuleScreen() {
           moduleId={module.id}
           passingScore={passingScore}
           questions={course.questions}
+          onSubmitted={refresh}
         />
       ) : null}
 
@@ -77,16 +122,50 @@ export default function ModuleScreen() {
       ) : null}
 
       {module.contentType === 'RICH_TEXT' && module.richTextContent ? (
-        <RichTextPlayer content={module.richTextContent} />
+        <RichTextPlayer
+          content={module.richTextContent}
+          alreadyComplete={alreadyDone}
+          onComplete={() => void markModuleDone()}
+        />
       ) : null}
 
       {(module.contentType === 'DOCUMENT_PDF' || module.contentType === 'PDF_POLICY') && pdfUri ? (
-        <PdfPlayer uri={pdfUri} />
+        <PdfPlayer
+          uri={pdfUri}
+          alreadyComplete={alreadyDone}
+          onAcknowledge={(signature) => void markModuleDone(signature)}
+        />
+      ) : null}
+
+      {module.contentType === 'EXTERNAL' && externalUrl ? (
+        <View className="flex-1 p-4 justify-center gap-3">
+          <TouchableOpacity
+            onPress={() => Linking.openURL(externalUrl)}
+            className="flex-row items-center justify-center gap-2 py-3.5 rounded-xl"
+            style={{ backgroundColor: c.primarySoft }}
+          >
+            <ExternalLink color={c.primary} size={18} />
+            <Text className="font-semibold" style={{ color: c.primary }}>
+              Open external course
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            disabled={alreadyDone}
+            onPress={() => void markModuleDone()}
+            className="py-3.5 rounded-xl items-center"
+            style={{ backgroundColor: alreadyDone ? c.border : c.primary, opacity: alreadyDone ? 0.7 : 1 }}
+          >
+            <Text className="font-semibold" style={{ color: alreadyDone ? c.muted : '#fff' }}>
+              {alreadyDone ? 'Marked complete' : 'Mark complete'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       ) : null}
 
       {!videoUri &&
       !scormUri &&
       !pdfUri &&
+      !externalUrl &&
       module.contentType !== 'QUIZ_EXCEL' &&
       module.contentType !== 'RICH_TEXT' ? (
         <View className="flex-1 items-center justify-center p-8">

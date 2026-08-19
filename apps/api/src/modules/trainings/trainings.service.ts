@@ -803,6 +803,7 @@ export class TrainingsService {
         timeSpentSec: e.timeSpentSec,
         completionScore: e.completionScore,
         completionPoints: e.completionPoints,
+        expiresAt: e.expiresAt,
         isMandatory: e.assignment?.isMandatory ?? false,
         training: {
           id: e.training.id,

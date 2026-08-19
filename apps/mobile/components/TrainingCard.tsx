@@ -5,6 +5,9 @@ import { ProgressBar, StatusChip, trainingTypeLabel, actionLabel } from './ui';
 import type { EnrollmentRow } from '../lib/api';
 
 function effectiveStatus(e: EnrollmentRow) {
+  if (e.status === 'EXPIRED' || (e.expiresAt && new Date(e.expiresAt) < new Date())) {
+    return 'EXPIRED';
+  }
   const overdue =
     e.dueDate && new Date(e.dueDate) < new Date() && e.status !== 'COMPLETED';
   return overdue ? 'OVERDUE' : e.status;
@@ -44,7 +47,7 @@ export function TrainingCard({
           <StatusChip status={status} />
         </View>
 
-        <View className="flex-row items-center gap-3 mt-3">
+        <View className="flex-row items-center gap-3 mt-3 flex-wrap">
           <View className="flex-row items-center gap-1">
             <Clock color={c.muted} size={12} />
             <Text className="text-xs" style={{ color: c.muted }}>
@@ -54,6 +57,11 @@ export function TrainingCard({
           {enrollment.dueDate ? (
             <Text className="text-xs" style={{ color: status === 'OVERDUE' ? c.danger : c.muted }}>
               Due {new Date(enrollment.dueDate).toLocaleDateString()}
+            </Text>
+          ) : null}
+          {enrollment.expiresAt ? (
+            <Text className="text-xs" style={{ color: status === 'EXPIRED' ? c.warning : c.muted }}>
+              Cert {new Date(enrollment.expiresAt).toLocaleDateString()}
             </Text>
           ) : null}
           {score != null ? (
@@ -84,7 +92,7 @@ export function TrainingCard({
         >
           <Play color={c.primary} size={14} />
           <Text className="text-sm font-semibold" style={{ color: c.primary }}>
-            {actionLabel(enrollment.status)}
+            {status === 'EXPIRED' ? 'Expired' : actionLabel(enrollment.status)}
           </Text>
         </View>
       </View>
